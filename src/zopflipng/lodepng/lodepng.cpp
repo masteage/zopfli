@@ -2526,6 +2526,35 @@ unsigned lodepng_chunk_create(unsigned char** out, size_t* outlength, unsigned l
 /* / Color types and such                                                   / */
 /* ////////////////////////////////////////////////////////////////////////// */
 
+#ifdef _ZOPFLI_GREYSCALE_NOT_USE_
+/*return type is a LodePNG error code*/
+static unsigned checkColorValidity(LodePNGColorType colortype, unsigned bd) /*bd = bitdepth*/
+{
+	switch(colortype)
+	{
+		case 0: if(!(                                 bd == 8 || bd == 16)) return 37; break; /*grey*/
+		case 2: if(!(                                 bd == 8 || bd == 16)) return 37; break; /*RGB*/
+		case 3: if(!(bd == 1 || bd == 2 || bd == 4 || bd == 8            )) return 37; break; /*palette*/
+		case 4: if(!(                                 bd == 8 || bd == 16)) return 37; break; /*grey + alpha*/
+		case 6: if(!(                                 bd == 8 || bd == 16)) return 37; break; /*RGBA*/
+		default: return 31;
+	}
+	return 0; /*allowed color type / bits combination*/
+}
+
+static unsigned getNumColorChannels(LodePNGColorType colortype)
+{
+	switch(colortype)
+	{
+		case 0: return 3; /*grey*/
+		case 2: return 3; /*RGB*/
+		case 3: return 1; /*palette*/
+		case 4: return 4; /*grey + alpha*/
+		case 6: return 4; /*RGBA*/
+	}
+	return 0; /*unexisting color type*/
+}
+#else
 /*return type is a LodePNG error code*/
 static unsigned checkColorValidity(LodePNGColorType colortype, unsigned bd) /*bd = bitdepth*/
 {
@@ -2553,6 +2582,7 @@ static unsigned getNumColorChannels(LodePNGColorType colortype)
   }
   return 0; /*unexisting color type*/
 }
+#endif	// _ZOPFLI_GREYSCALE_NOT_USE_
 
 static unsigned lodepng_get_bpp_lct(LodePNGColorType colortype, unsigned bitdepth)
 {
@@ -3648,7 +3678,11 @@ unsigned lodepng_get_color_profile(LodePNGColorProfile* profile,
       if(!bits_done && profile->bits < 8)
       {
         /*only r is checked, < 8 bits is only relevant for greyscale*/
+#ifdef _ZOPFLI_GREYSCALE_NOT_USE_
+		unsigned bits = 8;
+#else
         unsigned bits = getValueRequiredBits(r);
+#endif	// _ZOPFLI_GREYSCALE_NOT_USE_
         if(bits > profile->bits) profile->bits = bits;
       }
       bits_done = (profile->bits >= bpp);
@@ -3785,9 +3819,13 @@ unsigned lodepng_auto_choose_color(LodePNGColorMode* mode_out,
   else /*8-bit or 16-bit per channel*/
   {
     mode_out->bitdepth = prof.bits;
+#ifdef _ZOPFLI_GREYSCALE_NOT_USE_
+	mode_out->colortype = prof.alpha ? LCT_RGBA : LCT_RGB ;
+#else
     mode_out->colortype = prof.alpha ? (prof.colored ? LCT_RGBA : LCT_GREY_ALPHA)
                                      : (prof.colored ? LCT_RGB : LCT_GREY);
-
+#endif	// _ZOPFLI_GREYSCALE_NOT_USE_
+	  
     if(prof.key && !prof.alpha)
     {
       unsigned mask = (1u << mode_out->bitdepth) - 1u; /*profile always uses 16-bit, mask converts it*/
